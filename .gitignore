@@ -1,0 +1,11 @@
+data/
+cache/
+__pycache__/
+*.pyc
+
+sklearn-env/
+.venv/
+env/
+
+*.joblib
+*.pkl
