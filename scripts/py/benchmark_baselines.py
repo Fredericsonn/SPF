@@ -25,6 +25,7 @@ CSV_FIELDS = [
     "astar_runtime_ms",
     "astar_cost_ratio",
     "astar_expanded_ratio",
+    "astar_heuristic_scale",
 ]
 
 
@@ -79,10 +80,25 @@ def dijkstra_point_to_point(graph, source, target):
     return math.inf, expanded
 
 
-def astar_point_to_point(graph, coords, source, target):
+def compute_safe_heuristic_scale(graph, coords):
+    scale = 1.0
+
+    for source, neighbors in graph.items():
+        for target, weight in neighbors.items():
+            straight_line = euclidean(coords, source, target)
+
+            if straight_line <= 0:
+                continue
+
+            scale = min(scale, weight / straight_line)
+
+    return min(1.0, scale * 0.999)
+
+
+def astar_point_to_point(graph, coords, source, target, heuristic_scale):
     g_score = {node: math.inf for node in graph}
     g_score[source] = 0.0
-    queue = [(euclidean(coords, source, target), source)]
+    queue = [(heuristic_scale * euclidean(coords, source, target), source)]
     expanded = 0
     visited = set()
 
@@ -103,7 +119,10 @@ def astar_point_to_point(graph, coords, source, target):
 
             if tentative_g < g_score[neighbor]:
                 g_score[neighbor] = tentative_g
-                priority = tentative_g + euclidean(coords, neighbor, target)
+                priority = (
+                    tentative_g
+                    + heuristic_scale * euclidean(coords, neighbor, target)
+                )
                 heapq.heappush(queue, (priority, neighbor))
 
     return math.inf, expanded
@@ -144,12 +163,13 @@ def benchmark_subgraph(subgraph_path, query_count, seed, max_attempts):
     graph, coords, metadata = load_subgraph(subgraph_path)
     rng = random.Random(seed)
     queries = sample_reachable_queries(graph, query_count, rng, max_attempts)
+    heuristic_scale = compute_safe_heuristic_scale(graph, coords)
     rows = []
 
     print(
         f"Benchmarking {metadata['name']} "
         f"({metadata['node_count']} nodes, {metadata['edge_count']} edges, "
-        f"{query_count} queries)..."
+        f"{query_count} queries, A* heuristic scale={heuristic_scale:.6f})..."
     )
 
     for query_index, (source, target) in enumerate(queries, start=1):
@@ -165,6 +185,7 @@ def benchmark_subgraph(subgraph_path, query_count, seed, max_attempts):
             coords,
             source,
             target,
+            heuristic_scale,
         )
 
         if dijkstra_cost == 0 or math.isinf(dijkstra_cost):
@@ -194,6 +215,7 @@ def benchmark_subgraph(subgraph_path, query_count, seed, max_attempts):
                 "astar_runtime_ms": astar_runtime_ms,
                 "astar_cost_ratio": astar_cost_ratio,
                 "astar_expanded_ratio": astar_expanded_ratio,
+                "astar_heuristic_scale": heuristic_scale,
             }
         )
 
