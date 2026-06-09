@@ -11,9 +11,9 @@ from subgraph_loader import load_subgraph
 
 
 FEATURE_NAMES = [
-    "euclidean_distance",
-    "abs_dx",
-    "abs_dy",
+    "geodesic_distance_m",
+    "abs_dx_m",
+    "abs_dy_m",
     "node_out_degree",
     "target_out_degree",
     "node_avg_out_weight",
@@ -94,10 +94,24 @@ def dijkstra_all_distances(graph, start):
     return distances
 
 
-def euclidean(coords, node, target):
-    x1, y1 = coords[node]
-    x2, y2 = coords[target]
-    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+def coordinate_features_meters(coords, node, target):
+    lon1_raw, lat1_raw = coords[node]
+    lon2_raw, lat2_raw = coords[target]
+
+    lon1 = math.radians(lon1_raw / 1_000_000)
+    lat1 = math.radians(lat1_raw / 1_000_000)
+    lon2 = math.radians(lon2_raw / 1_000_000)
+    lat2 = math.radians(lat2_raw / 1_000_000)
+
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    mean_lat = (lat1 + lat2) / 2
+
+    dx = 6_371_000 * math.cos(mean_lat) * dlon
+    dy = 6_371_000 * dlat
+    geodesic = math.sqrt(dx**2 + dy**2)
+
+    return geodesic, abs(dx), abs(dy)
 
 
 def extract_feature_row(
@@ -108,15 +122,14 @@ def extract_feature_row(
     node,
     target,
 ):
-    x1, y1 = coords[node]
-    x2, y2 = coords[target]
     node_stats = out_stats[node]
     target_stats = out_stats[target]
+    geodesic, abs_dx, abs_dy = coordinate_features_meters(coords, node, target)
 
     return [
-        euclidean(coords, node, target),
-        abs(x1 - x2),
-        abs(y1 - y2),
+        geodesic,
+        abs_dx,
+        abs_dy,
         len(graph[node]),
         len(graph[target]),
         node_stats["avg"],

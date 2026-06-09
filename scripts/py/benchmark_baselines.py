@@ -29,9 +29,22 @@ CSV_FIELDS = [
 
 
 def euclidean(coords, node, target):
-    x1, y1 = coords[node]
-    x2, y2 = coords[target]
-    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+    lon1_raw, lat1_raw = coords[node]
+    lon2_raw, lat2_raw = coords[target]
+
+    lon1 = math.radians(lon1_raw / 1_000_000)
+    lat1 = math.radians(lat1_raw / 1_000_000)
+    lon2 = math.radians(lon2_raw / 1_000_000)
+    lat2 = math.radians(lat2_raw / 1_000_000)
+
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    )
+
+    return 6_371_000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def dijkstra_point_to_point(graph, source, target):
