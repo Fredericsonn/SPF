@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "${ROOT_DIR}"
+
+if [[ -d "sklearn-env" ]]; then
+  # shellcheck disable=SC1091
+  source "sklearn-env/Scripts/activate" 2>/dev/null || true
+  # shellcheck disable=SC1091
+  source "sklearn-env/bin/activate" 2>/dev/null || true
+fi
+
+MODEL_PATH="${MODEL_PATH:-data/models/ny_all/hgb/ny_all_hgb_T500.joblib}"
+QUERIES="${QUERIES:-100}"
+SEED="${SEED:-42}"
+SKIP_EXISTING="${SKIP_EXISTING:-1}"
+RESULT_ROOT="${RESULT_ROOT:-data/results/ml_astar/ny_T500_model}"
+TRAVERSAL_CACHE_DIR="${TRAVERSAL_CACHE_DIR:-data/results/traversal_cache/ny_heldout}"
+
+run_benchmark() {
+  local group="$1"
+  local test_id="$2"
+  local mode="$3"
+  local scale="$4"
+  local input_file="data/subgraphs/new_york/${group}_${test_id}.json.gz"
+  local scale_dir="${scale//./_}"
+  local output_file="${RESULT_ROOT}/${group}/${mode}/scale_${scale_dir}/test_${test_id}.csv"
+
+  if [[ "${SKIP_EXISTING}" == "1" && -s "${output_file}" ]]; then
+    echo "Skipping completed result: ${output_file}"
+    return
+  fi
+
+  echo
+  echo "============================================================"
+  echo "NY T500 benchmark: group=${group}, test=${test_id}, mode=${mode}, scale=${scale}"
+  echo "Model:     ${MODEL_PATH}"
+  echo "Input:     ${input_file}"
+  echo "Output:    ${output_file}"
+  echo "Cache dir: ${TRAVERSAL_CACHE_DIR}"
+  echo "============================================================"
+
+  bash scripts/sh/benchmark_ml_astar.sh \
+    --model "${MODEL_PATH}" \
+    --input "${input_file}" \
+    --output "${output_file}" \
+    --queries "${QUERIES}" \
+    --heuristic-mode "${mode}" \
+    --ml-scale "${scale}" \
+    --seed "${SEED}" \
+    --traversal-cache-dir "${TRAVERSAL_CACHE_DIR}"
+}
+
+run_group() {
+  local group="$1"
+  shift
+  local test_ids=("$@")
+
+  for test_id in "${test_ids[@]}"; do
+    run_benchmark "${group}" "${test_id}" "raw_ml" "1.00"
+    run_benchmark "${group}" "${test_id}" "min_ml_geo" "1.00"
+    run_benchmark "${group}" "${test_id}" "raw_ml" "0.25"
+    run_benchmark "${group}" "${test_id}" "raw_ml" "0.50"
+    run_benchmark "${group}" "${test_id}" "raw_ml" "0.75"
+  done
+}
+
+run_group "ny_1000" "009" "010"
+run_group "ny_5000" "009" "010"
+run_group "ny_10000" "009" "010"
+run_group "ny_25000" "005"
+
+echo
+echo "NY T500 model benchmarks complete."

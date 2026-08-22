@@ -1,0 +1,17 @@
+data/
+cache/
+datasets/
+
+__pycache__/
+*.pyc
+
+sklearn-env/
+.venv/
+env/
+venv/
+
+*.joblib
+*.pkl
+*.npz
+*.csv
+*.json.gz
